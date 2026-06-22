@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .upload-area { border: 2px dashed #007bff; border-radius: 10px; padding: 50px; text-align: center; }
+        .progress { height: 25px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-shield-alt"></i> Helmet Detection</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{% url 'home' %}">Home</a>
+                <a class="nav-link active" href="{% url 'upload' %}">Upload Video</a>
+                <a class="nav-link" href="{% url 'live' %}">Live Camera</a>
+                <a class="nav-link" href="{% url 'report' %}">Reports</a>
+                <a class="nav-link" href="{% url 'training' %}">Training</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card p-4">
+                    <h2 class="text-center mb-4"><i class="fas fa-video"></i> Video Detection</h2>
+                    <ul class="nav nav-tabs" id="detectionTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab" aria-controls="upload" aria-selected="true">Upload Video</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="live-tab" data-bs-toggle="tab" data-bs-target="#live" type="button" role="tab" aria-controls="live" aria-selected="false">Live Camera</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content mt-4" id="detectionTabsContent">
+                        <div class="tab-pane fade show active" id="upload" role="tabpanel" aria-labelledby="upload-tab">
+                            <form id="uploadForm" enctype="multipart/form-data">
+                                <div class="upload-area mb-4" id="uploadArea">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                                    <p>Drag & drop your video here or click to browse</p>
+                                    <input type="file" id="videoFile" name="video" accept="video/*" style="display: none;">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="uploadBtn">
+                                    <i class="fas fa-play"></i> Start Detection
+                                </button>
+                            </form>
+                            <div class="progress mt-3" id="progressBar" style="display: none;">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div id="result" class="mt-3"></div>
+                        </div>
+                        <div class="tab-pane fade" id="live" role="tabpanel" aria-labelledby="live-tab">
+                            <div class="text-center mb-4">
+                                <button id="startBtn" class="btn btn-success me-2"><i class="fas fa-play"></i> Start Camera</button>
+                                <button id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Stop Camera</button>
+                            </div>
+                            <video id="video" width="100%" autoplay muted></video>
+                            <canvas id="canvas" style="display: none;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Upload functionality
+        const uploadArea = document.getElementById('uploadArea');
+        const videoFile = document.getElementById('videoFile');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressBar = document.getElementById('progressBar');
+        const resultDiv = document.getElementById('result');
+
+        uploadArea.addEventListener('click', () => videoFile.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#28a745';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#007bff';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            videoFile.files = e.dataTransfer.files;
+            uploadArea.innerHTML = `<i class="fas fa-file-video fa-3x text-success mb-3"></i><p>${videoFile.files[0].name}</p>`;
+        });
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            uploadBtn.disabled = true;
+            progressBar.style.display = 'block';
+
+            try {
+                const response = await fetch('{% url "process_video" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+                const data = await response.json();
+                if (data.stream_url) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">${data.message}</div>
+                        <h5>Live Detection Stream:</h5>
+                        <img src="${data.stream_url}" width="100%" class="border rounded">
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            } finally {
+                uploadBtn.disabled = false;
+                progressBar.style.display = 'none';
+            }
+        });
+
+        // Live camera functionality
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        let stream;
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } catch (error) {
+                alert('Error accessing camera: ' + error.message);
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
