@@ -1,5 +1,5 @@
 Django==4.2.7
-opencv-python==4.8.1.78
+opencv-python==4.6.0.66
 ultralytics==8.0.196
 paddlepaddle==2.6.2
 paddleocr==2.7.0.3
