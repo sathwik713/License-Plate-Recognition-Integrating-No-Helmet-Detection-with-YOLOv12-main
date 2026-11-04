@@ -1,7 +1,7 @@
 Django==4.2.7
 opencv-python==4.8.1.78
 ultralytics==8.0.196
-paddlepaddle==2.5.1
+paddlepaddle==2.6.2
 paddleocr==2.7.0.3
 supervision==0.16.0
 numpy==1.24.3
